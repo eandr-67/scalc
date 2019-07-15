@@ -2,267 +2,107 @@ package scalc
 
 import (
 	"errors"
-	"math"
 	"reflect"
-	"strconv"
 )
 
-var errorTable = []error{
-	errors.New("stack is empty"),
-	errors.New("bad operand type"),
-	errors.New("the resulting stack size is not equal to one"),
-	errors.New("selector is not integer"),
-	errors.New("selector is not in range"),
+// Calculators опредделяет экспортируемый из модуля тип калькулятора
+type Calculators struct {
+	operators []operators
 }
 
-type does struct {
-	stack []interface{}
-	args  map[string]interface{}
-}
-
-type operator func(*does) error
-
-func (calc *does) exec(ops []operator) (err error) {
-	defer func() {
-		if temp := recover(); temp != nil {
-			err = temp.(error)
-		}
-	}()
-	for _, op := range ops {
-		if err = op(calc); err != nil {
-			return
-		}
-	}
-	return
-}
-
-type Calc struct {
-	operators []operator
-}
-
-var parser = map[string]operator{
-	"drop": operatorDrop,
-	"dup":  operatorDup,
-	"swap": operatorSwap,
-	"over": operatorOver,
-	"@":    operatorArgument,
-	"int": operatorUnary(unaryAction{
-		reflect.Int64:   func(val interface{}) interface{} { return val },
-		reflect.Float64: func(val interface{}) interface{} { return int64(val.(float64)) },
-		reflect.String: func(val interface{}) interface{} {
-			if result, err := strconv.ParseInt(val.(string), 10, 64); err != nil {
-				panic(err)
-			} else {
-				return result
-			}
-		},
-	}),
-	"float": operatorUnary(unaryAction{
-		reflect.Int64:   func(val interface{}) interface{} { return float64(val.(int64)) },
-		reflect.Float64: func(val interface{}) interface{} { return val },
-		reflect.String: func(val interface{}) interface{} {
-			if result, err := strconv.ParseFloat(val.(string), 64); err != nil {
-				panic(err)
-			} else {
-				return result
-			}
-		},
-	}),
-	"string": operatorUnary(unaryAction{
-		reflect.Int64:   func(val interface{}) interface{} { return strconv.FormatInt(val.(int64), 10) },
-		reflect.Float64: func(val interface{}) interface{} { return strconv.FormatFloat(val.(float64), 'g', -1, 64) },
-		reflect.String:  func(val interface{}) interface{} { return val },
-	}),
-	"~": operatorUnary(unaryAction{
-		reflect.Int64:   func(val interface{}) interface{} { return -val.(int64) },
-		reflect.Float64: func(val interface{}) interface{} { return -val.(float64) },
-	}),
-	"!": operatorUnary(unaryAction{
-		reflect.Int64: func(val interface{}) interface{} { return ^val.(int64) },
-	}),
-	"abs": operatorUnary(unaryAction{
-		reflect.Int64: func(val interface{}) interface{} {
-			if temp := val.(int64); temp < 0 {
-				return -temp
-			}
-			return val
-		},
-		reflect.Float64: func(val interface{}) interface{} { return math.Abs(val.(float64)) },
-	}),
-	"+": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}:     func(v1, v2 interface{}) interface{} { return v1.(int64) + v2.(int64) },
-		two{reflect.Float64, reflect.Float64}: func(v1, v2 interface{}) interface{} { return v1.(float64) + v2.(float64) },
-		two{reflect.String, reflect.String}:   func(v1, v2 interface{}) interface{} { return v1.(string) + v2.(string) },
-	}),
-	"-": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}:     func(v1, v2 interface{}) interface{} { return v1.(int64) - v2.(int64) },
-		two{reflect.Float64, reflect.Float64}: func(v1, v2 interface{}) interface{} { return v1.(float64) - v2.(float64) },
-	}),
-	"*": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}:     func(v1, v2 interface{}) interface{} { return v1.(int64) * v2.(int64) },
-		two{reflect.Float64, reflect.Float64}: func(v1, v2 interface{}) interface{} { return v1.(float64) * v2.(float64) },
-	}),
-	"/": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}:     func(v1, v2 interface{}) interface{} { return v1.(int64) / v2.(int64) },
-		two{reflect.Float64, reflect.Float64}: func(v1, v2 interface{}) interface{} { return v1.(float64) / v2.(float64) },
-	}),
-	"%": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}: func(v1, v2 interface{}) interface{} { return v1.(int64) % v2.(int64) },
-	}),
-	"&": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}: func(v1, v2 interface{}) interface{} { return v1.(int64) & v2.(int64) },
-	}),
-	"|": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}: func(v1, v2 interface{}) interface{} { return v1.(int64) | v2.(int64) },
-	}),
-	"^": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}: func(v1, v2 interface{}) interface{} { return v1.(int64) ^ v2.(int64) },
-	}),
-	"<<": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}: func(v1, v2 interface{}) interface{} { return v1.(int64) << uint64(v2.(int64)) },
-	}),
-	">>": operatorBinary(binaryAction{
-		two{reflect.Int64, reflect.Int64}: func(v1, v2 interface{}) interface{} { return v1.(int64) >> uint64(v2.(int64)) },
-	}),
-}
-
-func (calc *Calc) Exec(data map[string]interface{}) (result interface{}, err error) {
+// Exec выполняет вырадение calc с набором параметров data и возвращает едиснвенное значение
+// Если по завершению выполнеия вырадения кол-во значений в стеке не равно 1 - возвразается ошибка
+func (calc *Calculators) Exec(data map[string]interface{}) (result interface{}, err error) {
 	do := &does{make([]interface{}, 0, 16), data}
 	if err = do.exec(calc.operators); err != nil {
 		return
 	} else if len(do.stack) != 1 {
-		err = errorTable[2]
+		err = errors.New("the resulting stack size is not equal to one")
 	} else {
 		result = do.stack[0]
 	}
 	return
 }
 
-func (calc *Calc) ExecToSlice(data map[string]interface{}) (result []interface{}, err error) {
+// ExecToSlice выполняет выражение calc с набором параметров data и возвращает все значения,
+// находящиеся в стеке послезавершения выполнения выражения
+func (calc *Calculators) ExecToSlice(data map[string]interface{}) (result []interface{}, err error) {
 	do := &does{make([]interface{}, 0, 16), data}
-	if err = do.exec(calc.operators); err != nil {
+	if err = do.exec(calc.operators); err == nil {
 		result = do.stack
 	}
 	return
 }
 
-type unaryAction map[reflect.Kind]func(interface{}) interface{}
+// does определяет исполнителя, вычисляющего выражение
+type does struct {
+	stack []interface{}          // стек интерпретатора выражения
+	args  map[string]interface{} // набор параметров, вереданный в Calculators.Exec / Calculators.ExecToSlice
+}
 
-func operatorUnary(action unaryAction) operator {
-	return func(do *does) error {
-		if last := len(do.stack) - 1; last < 0 {
-			return errorTable[0]
-		} else if action, exists := action[reflect.TypeOf(do.stack[last]).Kind()]; !exists {
-			return errorTable[1]
-		} else {
-			do.stack[last] = action(do.stack[last])
-			return nil
+// operators определяет сигнатуру операций (команд) калькулятора
+type operators func(*does)
+
+// exec выполняет заданную ops последовательность операций (выражение) калькулятора
+func (calc *does) exec(ops []operators) (err error) {
+	defer func() {
+		if temp := recover(); temp != nil {
+			err = temp.(error)
 		}
+	}()
+	for _, op := range ops {
+		op(calc)
+	}
+	return
+}
+
+// unaryActions определяет массив унарных действий (по одной функции на каждый опустимый тип значения)
+type unaryActions map[reflect.Kind]func(interface{}) interface{}
+
+// operatorUnary является фабрикой унарных операций:
+// получает на вход массив унарных действий и возвращает замыкание - операцию
+func operatorUnary(action unaryActions) operators {
+	return func(do *does) {
+		last := len(do.stack) - 1
+		do.stack[last] = action[reflect.TypeOf(do.stack[last]).Kind()](do.stack[last])
 	}
 }
 
+// two определяет ключ бинарного действия: комбинацю типов двух значений
 type two [2]reflect.Kind
 
-type binaryAction map[two]func(interface{}, interface{}) interface{}
+// unaryActions определяет массив бинарных действий (по одной функции на каждую опустимую комбинацию типов двух значения)
+type binaryActions map[two]func(interface{}, interface{}) interface{}
 
-func operatorBinary(action binaryAction) operator {
-	return func(do *does) error {
-		if last := len(do.stack) - 1; last <= 0 {
-			return errorTable[0]
-		} else if action, exists := action[two{reflect.TypeOf(do.stack[last-1]).Kind(), reflect.TypeOf(do.stack[last]).Kind()}]; !exists {
-			return errorTable[1]
-		} else {
-			do.stack[last-1] = action(do.stack[last-1], do.stack[last])
-			do.stack = do.stack[:last]
-			return nil
-		}
+// operatorUnary является фабрикой бинарных операций:
+// получает на вход массив бинарных действий и возвращает замыкание - операцию
+func operatorBinary(action binaryActions) operators {
+	return func(do *does) {
+		last := len(do.stack) - 1
+		do.stack[last-1] = action[two{
+			reflect.TypeOf(do.stack[last-1]).Kind(),
+			reflect.TypeOf(do.stack[last]).Kind(),
+		}](do.stack[last-1], do.stack[last])
+		do.stack = do.stack[:last]
 	}
 }
 
-func operatorConstant(value interface{}) operator {
-	return func(do *does) error {
+// operatorUnary является фабрикой операции, помещающей в стек значение константы:
+// получает на вход значение онстанты и возвращает замыкание - операцию
+func operatorConstant(value interface{}) operators {
+	return func(do *does) {
 		do.stack = append(do.stack, value)
-		return nil
 	}
 }
 
-func operatorSelect(expressions [][]operator) operator {
-	return func(do *does) error {
-		if last := len(do.stack) - 1; last < 0 {
-			return errorTable[0]
-		} else if code, ok := do.stack[last].(int64); !ok {
-			return errorTable[3]
-		} else if code < 0 || code > int64(last) {
-			return errorTable[4]
-		} else {
-			do.stack = do.stack[:last]
-			return do.exec(expressions[code])
+// operatorSelect реализует операцию ветвления (switch)
+func operatorSelect(expressions [][]operators) operators {
+	return func(do *does) {
+		last := len(do.stack) - 1
+		code := do.stack[last].(int64)
+		do.stack = do.stack[:last]
+		if err := do.exec(expressions[code]); err != nil {
+			panic(err)
 		}
-	}
-}
-
-func operatorDrop(do *does) error {
-	if last := len(do.stack); last == 0 {
-		return errorTable[0]
-	} else {
-		do.stack = do.stack[:last-1]
-		return nil
-	}
-}
-
-func operatorDup(do *does) error {
-	if last := len(do.stack); last == 0 {
-		return errorTable[0]
-	} else {
-		do.stack = append(do.stack, do.stack[last-1])
-		return nil
-	}
-}
-
-func operatorSwap(do *does) error {
-	if last := len(do.stack) - 1; last < 1 {
-		return errorTable[0]
-	} else {
-		temp := do.stack[last]
-		do.stack[last] = do.stack[last-1]
-		do.stack[last-1] = temp
-		return nil
-	}
-}
-
-func operatorOver(do *does) error {
-	if last := len(do.stack); last < 2 {
-		return errorTable[0]
-	} else {
-		do.stack = append(do.stack, do.stack[last-2])
-		return nil
-	}
-}
-
-func operatorArgument(do *does) error {
-	if last := len(do.stack) - 1; last < 1 {
-		return errorTable[0]
-	} else if name, ok := do.stack[last].(string); !ok {
-		return errors.New("stack value is not string")
-	} else if raw, exists := do.args[name]; !exists {
-		return errors.New("argument not exists")
-	} else if value, err := getArgument(raw); err != nil {
-		return err
-	} else {
-		do.stack[last] = value
-		return nil
-	}
-}
-
-func getArgument(value interface{}) (interface{}, error) {
-	switch value := reflect.Indirect(reflect.ValueOf(value)); value.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return value.Int(), nil
-	case reflect.Float32, reflect.Float64:
-		return value.Float(), nil
-	case reflect.String:
-		return value.String(), nil
-	default:
-		return nil, errors.New("argument type is not valid")
 	}
 }
