@@ -54,6 +54,14 @@ func TestStackOperations(t *testing.T) {
 	}
 }
 
+func TestUnaryOperationErrors(t *testing.T) {
+	for _, err := range test([]rounds{
+		{"1 drop --", nil, true},
+	}, nil) {
+		t.Error(err)
+	}
+}
+
 func TestBinaryOperationErrors(t *testing.T) {
 	for _, err := range test([]rounds{
 		{"1 drop +", nil, true},
@@ -63,9 +71,11 @@ func TestBinaryOperationErrors(t *testing.T) {
 	}
 }
 
-func TestUnaryOperationErrors(t *testing.T) {
+func TestTernaryOperationErrors(t *testing.T) {
 	for _, err := range test([]rounds{
-		{"1 drop --", nil, true},
+		{"1 drop replace", nil, true},
+		{"aaa replace", nil, true},
+		{"aaa a replace", nil, true},
 	}, nil) {
 		t.Error(err)
 	}
@@ -120,19 +130,19 @@ func TestSwitch(t *testing.T) {
 func TestCompareOperations(t *testing.T) {
 	for _, err := range test([]rounds{
 		{" 1 2 = 2 1 = 2 2 = ", []interface{}{int64(0), int64(0), int64(1)}, false},
-		{" 1 2 != 2 1 != 2 2 != ", []interface{}{int64(1), int64(1), int64(0)}, false},
+		{" 1 2 # 2 1 # 2 2 # ", []interface{}{int64(1), int64(1), int64(0)}, false},
 		{" 1 2 > 2 1 > 2 2 > ", []interface{}{int64(0), int64(1), int64(0)}, false},
 		{" 1 2 < 2 1 < 2 2 < ", []interface{}{int64(1), int64(0), int64(0)}, false},
 		{" 1 2 >= 2 1 >= 2 2 >= ", []interface{}{int64(0), int64(1), int64(1)}, false},
 		{" 1 2 <= 2 1 <= 2 2 <= ", []interface{}{int64(1), int64(0), int64(1)}, false},
 		{" 1.2 2.1 = 2.3 1.4 = 2.5 2.5 = ", []interface{}{int64(0), int64(0), int64(1)}, false},
-		{" 1.2 2.1 != 2.3 1.4 != 2.5 2.5 != ", []interface{}{int64(1), int64(1), int64(0)}, false},
+		{" 1.2 2.1 # 2.3 1.4 # 2.5 2.5 # ", []interface{}{int64(1), int64(1), int64(0)}, false},
 		{" 1.2 2.1 > 2.3 1.4 > 2.5 2.5 > ", []interface{}{int64(0), int64(1), int64(0)}, false},
 		{" 1.2 2.1 < 2.3 1.4 < 2.5 2.5 < ", []interface{}{int64(1), int64(0), int64(0)}, false},
 		{" 1.2 2.1 >= 2.3 1.4 >= 2.5 2.5 >= ", []interface{}{int64(0), int64(1), int64(1)}, false},
 		{" 1.2 2.1 <= 2.3 1.4 <= 2.5 2.5 <= ", []interface{}{int64(1), int64(0), int64(1)}, false},
 		{" aaa bbb = ddd ccc = eee eee = ", []interface{}{int64(0), int64(0), int64(1)}, false},
-		{" aaa bbb != ddd ccc != eee eee != ", []interface{}{int64(1), int64(1), int64(0)}, false},
+		{" aaa bbb # ddd ccc # eee eee # ", []interface{}{int64(1), int64(1), int64(0)}, false},
 		{" aaa bbb > ddd ccc > eee eee > ", []interface{}{int64(0), int64(1), int64(0)}, false},
 		{" aaa bbb < ddd ccc < eee eee < ", []interface{}{int64(1), int64(0), int64(0)}, false},
 		{" aaa bbb >= ddd ccc >= eee eee >= ", []interface{}{int64(0), int64(1), int64(1)}, false},
@@ -159,10 +169,25 @@ func TestUnaryOperators(t *testing.T) {
 		{"25.25 abs 0.0 abs -25.25 abs", []interface{}{float64(25.25), float64(0.0), float64(25.25)}, false},
 		{"25 sign 0 sign -25 sign", []interface{}{int64(1), int64(0), int64(-1)}, false},
 		{"25.25 sign 0.0 sign -25.25 sign", []interface{}{int64(1), int64(0), int64(-1)}, false},
-		{"' len aaa len", []interface{}{int64(0), int64(3)}, false},
 		{"2.25 sqrt", []interface{}{float64(1.5)}, false},
 		{"1.0 0.0 / isInf -1.0 0.0 / isInf -1.0 isInf 0.0 isInf 1.0 isInf", []interface{}{int64(1), int64(1), int64(0), int64(0), int64(0)}, false},
 		{"-1.0 sqrt isNaN -1.0 isNaN 0.0 isNaN 1.0 isNaN", []interface{}{int64(1), int64(0), int64(0), int64(0)}, false},
+		{"3.0 ln 5.0 ln + exp 0.10f swap format", []interface{}{"15.0000000000"}, false},
+		{"7.49 ceil 7.5 ceil 7.51 ceil -7.49 ceil -7.5 ceil -7.51 ceil",
+			[]interface{}{float64(8.0), float64(8.0), float64(8.0), float64(-7.0), float64(-7.0), float64(-7.0)}, false},
+		{"7.49 floor 7.5 floor 7.51 floor -7.49 floor -7.5 floor -7.51 floor",
+			[]interface{}{float64(7.0), float64(7.0), float64(7.0), float64(-8.0), float64(-8.0), float64(-8.0)}, false},
+		{"7.49 round 7.5 round 7.51 round -7.49 round -7.5 round -7.51 round",
+			[]interface{}{float64(7.0), float64(8.0), float64(8.0), float64(-7.0), float64(-8.0), float64(-8.0)}, false},
+		{"7.49 trunc 7.5 trunc 7.51 trunc -7.49 trunc -7.5 trunc -7.51 trunc",
+			[]interface{}{float64(7.0), float64(7.0), float64(7.0), float64(-7.0), float64(-7.0), float64(-7.0)}, false},
+		{"1.25 frac 0.0 frac -1.25 frac", []interface{}{float64(0.25), float64(0.0), float64(-0.25)}, false},
+		{"' len aaa len", []interface{}{int64(0), int64(3)}, false},
+		{"\\s\\t\\naaa\\s\\t\\n dup trim", []interface{}{" \t\naaa \t\n", "aaa"}, false},
+		{"пРоСтОТеСтрЕгИсТрА upper пРоСтОТеСтрЕгИсТрА lower", []interface{}{"ПРОСТОТЕСТРЕГИСТРА", "простотестрегистра"}, false},
+		{"' isEmpty a isEmpty", []interface{}{int64(1), int64(0)}, false},
+		{"0 isEmpty -1 isEmpty 1 isEmpty", []interface{}{int64(1), int64(0), int64(0)}, false},
+		{"0.0 isEmpty -1.1 isEmpty 1.1 isEmpty", []interface{}{int64(1), int64(0), int64(0)}, false},
 	}, nil) {
 		t.Error(err)
 	}
@@ -179,6 +204,7 @@ func TestBinaryOperators(t *testing.T) {
 		{"1.25 -3.5 -", []interface{}{float64(4.75)}, false},
 		{"2 -3 *", []interface{}{int64(-6)}, false},
 		{"1.25 -3.5 *", []interface{}{float64(-4.375)}, false},
+		{"-2.25 3.0 **", []interface{}{float64(-11.390625)}, false},
 		{"5 -3 /", []interface{}{int64(-1)}, false},
 		{"16.0 0.5 /", []interface{}{float64(32.0)}, false},
 		{"5 3 % 5 -3 % -5 -3 % -5 3 %", []interface{}{int64(2), int64(2), int64(-2), int64(-2)}, false},
@@ -187,6 +213,49 @@ func TestBinaryOperators(t *testing.T) {
 		{"13 25 ^", []interface{}{int64(20)}, false},
 		{"13 2 << -13 2 <<", []interface{}{int64(52), int64(-52)}, false},
 		{"13 2 >> -13 2 >>", []interface{}{int64(3), int64(-4)}, false},
+		{"ccc aaa bbb min min", []interface{}{"aaa"}, false},
+		{"3 -5 -1 min min", []interface{}{int64(-5)}, false},
+		{"3.5 -5.5 -1.1 min min", []interface{}{float64(-5.5)}, false},
+		{"bbb ccc aaa max max", []interface{}{"ccc"}, false},
+		{"-1 3 -5 max max", []interface{}{int64(3)}, false},
+		{"-1.1 3.5 -5.5 max max", []interface{}{float64(3.5)}, false},
+		{"abcdefabcdef cd index abcdefabcdef ce index", []interface{}{int64(2), int64(-1)}, false},
+		{"abcdefabcdef cd indexLast abcdefabcdef ce indexLast", []interface{}{int64(8), int64(-1)}, false},
+		{"abcdef 2 left", []interface{}{"ab"}, false},
+		{"abcdef 2 right", []interface{}{"ef"}, false},
+		{"c.{3}c abcdabcd regexMatch c.{2}c abcdabcd regexMatch", []interface{}{int64(1), int64(0)}, false},
+		{") abcdabcd regexMatch", nil, true},
+	}, nil) {
+		t.Error(err)
+	}
+}
+
+func TestFormatOperator(t *testing.T) {
+	for _, err := range test([]rounds{
+		{"5s abc format", []interface{}{"  abc"}, false},
+		{"05d 123 format", []interface{}{"00123"}, false},
+		{"010.5f 1.23e-2 format", []interface{}{"0000.01230"}, false},
+	}, nil) {
+		t.Error(err)
+	}
+}
+
+func TestTimeOperators(t *testing.T) {
+	for _, err := range test([]rounds{
+		{"02.01.2006\\s05:04:15 30.12.1953\\s54:32:10 timeParse 87654321 - Mon,\\s02\\sJan\\s2006\\s15:04:05 swap timeFormat",
+			[]interface{}{"Thu, 22 Mar 1951 01:07:33"}, false},
+		{"02.01.2006\\s05:04:15 30-12-1953\\s54*32*10 timeParse", nil, true},
+	}, nil) {
+		t.Error(err)
+	}
+}
+
+func TestTernaryOperators(t *testing.T) {
+	for _, err := range test([]rounds{
+		{"da PQ abcdabcd replace ab PQ abcdabcd replace cd PQ abcdabcd replace ad PQ abcdabcd replace",
+			[]interface{}{"abcPQbcd", "PQcdPQcd", "abPQabPQ", "abcdabcd"}, false},
+		{"(\\\\w)abcd(\\\\w) ${1}PQ${2} abcdabcdabcd regexReplace", []interface{}{"abcdPQabcd"}, false},
+		{"(\\\\w)ab)cd(\\\\w) ${1}PQ${2} abcdabcdabcd regexReplace", nil, true},
 	}, nil) {
 		t.Error(err)
 	}
